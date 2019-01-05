@@ -1,0 +1,35 @@
+// Since there is no function available to read multiple files in a local directory in one time right now, I have to copy the datasets in the directory mentioned to HDFS
+hadoop fs -copyFromLocal /data/nyse /user/lanwei94/nyse
+
+val nyse = sc.textFile("/user/lanwei94/nyse")
+nyse.take(10).foreach(println)
+
+val nyse_map = nyse.map(rec => {
+val r = rec.split(",")
+(r(0), r(1), r(2).toFloat, r(3).toFloat, r(4).toFloat, r(5).toFloat, r(6).toInt)
+})
+nyse_map.take(10).foreach(println)
+
+val nyseDF = nyse_map.toDF("stockticker", "transactiondate", "openprice", "highprice", "lowprice", "closeprice", "volume")
+nyseDF.show
+
+nyseDF.write.parquet("/user/lanwei94/nyse_parquet")
+// nyseDF.save("/user/lanwei94/nyse_parquet", "parquet")
+
+// to validate the outcome:
+// Since parquet is a special file type that you cannot open it up to validate directly, you should read it from the HDFS system to spark and check out the outcome.
+sqlContext.read.parquet("/user/lanwei94/nyse_parquet").show
+sqlContext.load("/user/lanwei94/nyse_parquet", "parquet").show
+
+
+
+
+
+
+
+
+
+
+
+
+

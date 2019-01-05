@@ -1,0 +1,82 @@
+spark-shell --master yarn \
+--conf spark.ui.port=12345 \
+--num-executors 6 \
+--executor-cores 2 \
+--executor-memory 2G
+
+
+// Approach 1 --> RDD
+val orders = scala.io.Source.fromFile("/data/retail_db/orders/part-00000").getLines.toList
+val orders_rdd = sc.parallelize(orders)
+orders_rdd.take(10).foreach(println)
+val ordersMap = orders_rdd.map(rec => (rec.split(",")(2).toInt, 1))
+ordersMap.take(10).foreach(println)
+
+val customers = scala.io.Source.fromFile("/data/retail_db/customers/part-00000").getLines.toList
+val customers_rdd = sc.parallelize(customers)
+customers_rdd.take(10).foreach(println)
+val customers_name = customers_rdd.map(rec => (rec.split(",")(0).toInt, (rec.split(",")(2), rec.split(",")(1))))
+customers_name.take(10).foreach(println)
+
+
+val customers_join = customers_name.leftOuterJoin(ordersMap)
+
+val customer_inactive = customers_join.filter(rec => rec._2._2 == None).map(rec => (rec._2._1._1, rec._2._1._2))
+customer_inactive.take(10).foreach(println)
+
+val customer_inactive_sort = customer_inactive.sortByKey()
+
+customer_inactive_sort.map(rec => rec._1 + ", " + rec._2).
+
+customer_inactive_sort.map(rec => rec._1 + ", " + rec._2).coalesce(1).saveAsTextFile("/user/lanwei94/solutions/solutions02/inactive_customers")
+
+
+// Approach 1 --> SparkSql
+val orders = scala.io.Source.fromFile("/data/retail_db/orders/part-00000").getLines.toList
+val orders_rdd = sc.parallelize(orders)
+orders_rdd.take(10).foreach(println)
+
+val ordersDF = orders_rdd.map(rec => rec.split(",")(2).toInt).toDF("customer_id")
+ordersDF.registerTempTable("orders")
+
+
+val customers = scala.io.Source.fromFile("/data/retail_db/customers/part-00000").getLines.toList
+val customers_rdd = sc.parallelize(customers)
+customers_rdd.take(10).foreach(println)
+
+val customersDF = customers_rdd.map(rec => (rec.split(",")(0).toInt, rec.split(",")(2), rec.split(",")(1))).toDF("customer_id", "customer_lname", "customer_fname")
+customersDF.registerTempTable("customers")
+
+val inactive_customer = sqlContext.sql("SELECT customer_lname, customer_fname FROM customers LEFT OUTER JOIN orders ON customers.customer_id = orders.customer_id " +
+"ORDER BY customer_lname, customer_fname").map(rec => rec.mkString(", "))
+
+inactive_customer.saveAsTextFile("/user/lanwei94/solutions/solutions02/inactive_customers")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

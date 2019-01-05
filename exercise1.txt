@@ -1,0 +1,58 @@
+spark-shell --master yarn \
+--conf spark.ui.port=12654 \
+--num-executors 6 \
+--executor-cores 2 \
+--executor-memory 2G
+
+
+// Approach 1: --> RDD
+val crimeData = sc.textFile("/public/crime/csv")
+val header = crimeData.first
+val crimeDataWithoutHeader = crimeData.filter(criminalRecord => criminalRecord != header)
+
+val date_type = crimeDataWithoutHeader.map(row => (row.split(",")(2).split(" ")(0).split('/')(2)+row.split(",")(2).split(" ")(0).split('/')(0), row.split(",")(5)))
+date_type.first
+
+val date_type_key = date_type.map(row => ((row._1.toInt, row._2), 1))
+date_type_key.first
+
+val date_type_count = date_type_key.reduceByKey((x, y) => x+y)
+date_type_count.take(20).foreach(println)
+
+val date_type_sort = date_type_count.map(row => ((row._1._1.toInt, -row._2.toInt), row._1._1 + "\t" + row._2 + "\t" + row._1._2)).sortByKey().map(row => row._2)
+date_type_sort.take(20).foreach(println)
+
+date_type_sort.coalesce(1).saveAsTextFile("/user/lanwei94/solutions/solution01/crimes_by_type_by_month", classOf[org.apache.hadoop.io.compress.GzipCodec])
+
+// Approach 2 --> sqlContext
+val crimeData = sc.textFile("/public/crime/csv")
+val header = crimeData.first
+val crimeDataWithoutHeader = crimeData.filter(criminalRecord => criminalRecord != header) 
+
+val crimeDataWithDateAndTypeDF = crimeDataWithoutHeader.
+  map(row => {val value = row.split(",")
+  (value(2).split(" ")(0).split("/")(2), value(2).split(" ")(0).split("/")(0), value(5))
+  }).toDF("year", "month", "crime_type")
+  
+crimeDataWithDateAndTypeDF.take(10).foreach(println)
+
+crimeDataWithDateAndTypeDF.registerTempTable("crime_data")
+
+val crimeTypeCount = sqlContext.sql("SELECT year, month, crime_type, COUNT(*) AS crime_count " +
+ "FROM crime_data GROUP BY year, month, crime_type " +
+ "ORDER BY year, month, COUNT(*) DESC")
+
+crimeTypeCount.take(10).foreach(println)
+
+
+val crimeTypeCountRDD = crimeTypeCount.rdd.map(rec => rec.mkString("\t"))
+
+crimeTypeCountRDD.coalesce(1).saveAsTextFile("/user/lanwei94/solutions/solution01/crimes_by_type_by_month", classOf[org.apache.hadoop.io.compress.GzipCodec])
+
+
+
+
+
+
+
+

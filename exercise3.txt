@@ -1,0 +1,45 @@
+spark-shell --master yarn \
+--conf spark.ui.port=12345 \
+--num-executors 6 \
+--executor-cores 2 \
+--executor-memory 2G
+
+hadoop fs -rm -R user/lanwei94/solutions/solution03/RESIDENCE_AREA_CRIMINAL_TYPE_DATA
+hadoop fs -ls user/lanwei94/solutions/solution03/RESIDENCE_AREA_CRIMINAL_TYPE_DATA
+hadoop fs -cat user/lanwei94/solutions/solution03/RESIDENCE_AREA_CRIMINAL_TYPE_DATA/part-r-00000-0fa13ce6-8a17-476a-8576-44ba9dfde460
+
+
+// RDD
+val crime = sc.textFile("/public/crime/csv")
+crime.take(10).foreach(println)
+
+val header = crime.first
+val crimeWithoutHeader = crime.filter(rec => rec != header)
+val residence = crimeWithoutHeader.filter(rec => rec.split(",")(7) == "RESIDENCE")
+residence.take(10).foreach(println)
+
+val crime_type = residence.map(rec => (rec.split(",")(5), 1))
+crime_type.take(10).foreach(println)
+val crime_count = sc.parallelize(crime_type.reduceByKey((x, y) => x+y).map(rec => (-rec._2, rec._1)).sortByKey().take(3).map(rec => (rec._2, -rec._1)))
+crime_count.toDF("Crime Type", "Number of Incidents").write.json("user/lanwei94/solutions/solution03/RESIDENCE_AREA_CRIMINAL_TYPE_DATA")
+
+// sqlContext
+
+val crime = sc.crime("/public/crime/csv")
+
+val header = crime.first
+val crimeWithoutHeader = crime.filter(rec => rec != header)
+val type_location = crimeWithoutHeader.map(rec => (rec.split(",")(5), rec.split(",")(7)))
+
+type_location.take(10).foreach(println)
+
+val type_locationDF = type_location.toDF("Crime_Type", "Location_Description")
+type_locationDF.registerTempTable("crime")
+
+val crime_count = sqlContext.sql("SELECT Crime_Type, COUNT(*) AS crime_count FROM crime WHERE Location_Description == \"RESIDENCE\" "+
+"GROUP BY Crime_Type ORDER BY COUNT(*) DESC LIMIT 3")
+
+crime_count.write.json("user/lanwei94/solutions/solution03/RESIDENCE_AREA_CRIMINAL_TYPE_DATA")
+
+
+
