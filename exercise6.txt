@@ -1,0 +1,90 @@
+spark-shell --master yarn \
+--conf spark.ui.port=12345
+
+// 1. Creat database and tables
+sqlContext.sql("create database lanwei94_retail_db_txt")
+sqlContext.sql("use lanwei94_retail_db_txt")
+sqlContext.sql("show tables").show
+
+tail /data/retail_db/customers/part-00000
+
+// 2. Load the requested data into tables
+sqlContext.sql("create table customers (cust_id int, cust_fname varchar(40), cust_lname varchar(40), cust_email varchar(40),cust_password varchar(40),cust_street varchar(40),cust_city varchar(40),cust_state varchar(40),cust_zip varchar(40)) row format delimited fields terminated by \",\" stored as textfile")
+
+sqlContext.sql("load data local inpath \"/data/retail_db/customers\" into table customers")
+sqlContext.sql("select * from customers").show
+
+// 3. Retrive --sqlContext
+customers:
++-------------+-----------+-------+
+|     col_name|  data_type|comment|
++-------------+-----------+-------+
+|      cust_id|        int|   null|
+|   cust_fname|varchar(40)|   null|
+|   cust_lname|varchar(40)|   null|
+|   cust_email|varchar(40)|   null|
+|cust_password|varchar(40)|   null|
+|  cust_street|varchar(40)|   null|
+|    cust_city|varchar(40)|   null|
+|   cust_state|varchar(40)|   null|
+|     cust_zip|varchar(40)|   null|
++-------------+-----------+-------+
+
+orders:
++-----------------+---------+-------+
+|         col_name|data_type|comment|
++-----------------+---------+-------+
+|         order_id|      int|   null|
+|       order_date|   string|   null|
+|order_customer_id|      int|   null|
+|     order_status|   string|   null|
++-----------------+---------+-------+
+
+order_items:
++--------------------+---------+-------+
+|            col_name|data_type|comment|
++--------------------+---------+-------+
+|       order_item_id|      int|   null|
+| order_item_order_id|      int|   null|
+|order_item_produc...|      int|   null|
+| order_item_quantity|      int|   null|
+| order_item_subtotal|    float|   null|
+|order_item_produc...|    float|   null|
++--------------------+---------+-------+
+
+
+
+val report = sqlContext.sql("SELECT c.*, temp.order_month, temp.revenue, temp.rank " +
+"FROM customers AS c, (SELECT cast(concat(substr(order_date,1,4), substr(order_date,6,2)) AS int) AS order_month, order_customer_id, SUM(order_item_subtotal) AS revenue, " +
+"RANK() OVER (PARTITION BY cast(concat(substr(order_date,1,4), substr(order_date,6,2)) AS int) ORDER BY SUM(order_item_subtotal) DESC) AS rank " +
+"FROM order_items, orders WHERE order_items.order_item_id = orders.order_id " +
+"GROUP BY cast(concat(substr(order_date,1,4), substr(order_date,6,2)) AS int), order_customer_id) temp " +
+"WHERE temp.order_customer_id = c.cust_id AND temp.rank <= 5 ORDER BY temp.order_month, temp.revenue DESC")
+
+report.registerTempTable("report")
+
+sqlContext.sql("CREATE TABLE lanwei94_retail_db_txt AS SELECT * FROM report")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
