@@ -87,4 +87,4 @@ sqoop export \
 --password cloudera \
 --export-dir /user/cloudera/problem1/result4a-csv \
 --table result \
---columns \
+--columns order_date,order_status,total_amount,total_orders \
