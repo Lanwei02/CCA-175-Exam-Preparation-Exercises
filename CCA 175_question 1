@@ -1,0 +1,90 @@
+// Question 1
+sqoop impport \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dba \
+--password cloudera \
+--table ordes \
+--compress \
+--compression-codec org.apache.hadoop.io.compress.SnappyCodec \
+--target-dir /user/cloudera/problem1/orders \
+--as-avrodatafile
+
+// Question 2
+sqoop import \
+--connect jdbc:mysql://quickstart.cloudera:3306/retail_db \
+--username retail_dab \
+--password clourdera \
+--table order_items \
+--compress \
+--compression-codec org.apache.hadoop.io.compress.SnappyCodec \
+--target-dir /user/cloudera/problem1/order-items \
+--as-avrodatafile
+
+
+// Question 3
+import com.databricks.spark.avro._
+val orders = sqlContext.read.avro("/user/cloudera/problem1/orders")
+val order_items =sqlContext.read.avro("/user/cloudera/problem1/orders")
+
+// Using avaliable dataset
+val orders = scala.io.Source.fromFile("/data/retail_db/orders/part-00000").getLines.toList
+val ordersRDD = sc.parallelize(orders)
+
+
+val order_items = scala.io.Source.fromFile("/data/retail_db/order_items/part-00000").getLines.toList
+val order_itemsRDD = sc.parallelize(order_items)
+
+
+
+// Question 4
+// b.Spark SQL:
+// orders.registerTempTable("orders")
+// order_items.registerTempTable("order_items")
+
+val ordersDF = ordersRDD.map(rec => (rec.split(",")(0), rec.split(",")(1), rec.split(",")(3))).toDF("order_ID", "order_date", "order_statues")
+ordersDF.registerTempTable("orders")
+
+val order_itemsDF = order_itemsRDD.map(rec => (rec.split(",")(0), rec.split(",")(1), rec.split(",")(5))).toDF("order_item_ID", "order_ID", "order_amount")
+ order_itemsDF.registerTempTable("order_items")
+
+val order_sorted = sqlContext.sql("SELECT TO_DATE(SUBSTR(order_date, 0, 10)) AS date, orders.order_statues, " +
+"COUNT(*) AS total_orders, SUM(order_amount) AS total_amount " +
+"FROM orders, order_items WHERE orders.order_ID = order_items.order_ID GROUP BY TO_DATE(SUBSTR(order_date, 0, 10)), orders.order_statues " +
+"ORDER BY TO_DATE(SUBSTR(order_date, 0, 10)) DESC, orders.order_statues, SUM(order_amount) DESC, COUNT(*)")
+order_sorted.show
+
+
+// c. RDDs
+val orders = ordersRDD.map(rec => (rec.split(",")(0),(rec.split(",")(1).split(" ")(0).split("-")(0)+rec.split(",")(1).split(" ")(0).split("-")(1)+rec.split(",")(1).split(" ")(0).split("-")(2).toInt, rec.split(",")(3))))
+val order_items = order_itemsRDD.map(rec => (rec.split(",")(1),  rec.split(",")(5).toFloat))
+
+val orders_join = orders.leftOuterJoin(order_items)
+
+val orders_count = orders_join.map(rec => ((rec._2._1._1.toInt, rec._2._1._2),1)).reduceByKey((x, y) => x+y)
+val orders_amount = orders_join.map(rec => ((rec._2._1._1.toInt, rec._2._1._2),rec._2._2)).filter(rec => rec._2 != None).map(rec => ((rec._1._1, rec._1._2), rec._2.getOrElse(0).asInstanceOf[Float])).reduceByKey((x, y) => x+y)
+
+val order_sort = orders_count.join(orders_amount).map(rec => (rec._1._1, rec._1._2, rec._2._1, rec._2._2)).toDF("date","type","total","amount")
+
+val order_sorted = order_sort.orderBy(col("total").desc)
+
+// Qusetion 5:
+sqlContext.setConf("Spark.sql.parquet.compression.codec", "gzip")
+order_sorted.write.parquet("/user/cloudera/problem1/result4b-gzip")
+
+// Question 6:
+sqlContext.setConf("Spark.sql.parquet.Compression.codec", "sanppy")
+order_sorted.write.parquet("/user/cloudera/problem1/result4b-gzip")
+
+
+// Question 7:
+order_sorted.map(rec => rec.mkString(",")).saveAsTextFile("/user/cloudera/problem1/result4a-csv")
+
+
+// Question 8:
+sqoop export \
+--connect jdbc:mysql
+--username retail_dba \
+--password cloudera \
+--export-dir /user/cloudera/problem1/result4a-csv \
+--table result \
+--columns \
