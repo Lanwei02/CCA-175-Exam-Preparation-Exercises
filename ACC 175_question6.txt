@@ -1,0 +1,49 @@
+// question 1:
+
+sqoop import-all-tables \
+--connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+--username retail_user \
+--password itversity \
+--warehouse-dir /apps/hive/warehouse/problem6_lanwei94.db \
+--hive-import \
+--hive-database problem6_lanwei94 \
+--create-hive-table \
+--as-textfile
+
+
+// questin 2:
+sqlContext.sql("use problem6_lanwei94")
+sqlContext.sql("show tables").show
+
+// question 3:
+sqlContext.sql("SELECT * FROM departments").show
+sqlContext.sql("SELECT * FROM products").show
+sqlContext.sql("SELECT d.department_id AS department_id, p.product_id AS product_id, p.product_price AS product_price, RANK() OVER (PARTITION BY d.department_id ORDER BY p.product_price) AS price_ranking FROM departments AS d, categories AS c, products AS p WHERE d.department_id = c.category_department_id AND c.category_id = p.product_id ORDER BY d.department_id, price_ranking DESC")
+
+
+// question 4:
+SELECT c.customer_id AS customer_id, COUNT(DISTINCT(i.order_item_product_id)) AS unique_product
+FROM customers AS c, orders AS o, order_items AS i
+WHERE c.customer_id = o.order_customer_id AND o.order_id = i.order_item_order_id
+GROUP BY c.customer_id
+ORDER BY unique_product DESC, c.customer_id
+LIMIT 10
+
+// question 5:
+// department_id, product_id, product_price, price_ranking
+question3.registerTempTable("question3")
+
+SELECT *
+FROM question3
+WHERE product_price < 100
+
+//question 6:
+// customer_id, unique_product
+question4.registerTempTable("question4")
+
+SELECT DINTINCT p.*
+FROM question4 AS q4, orders AS o, order_items AS i, products AS p
+WHERE q4.customer_id = o.order_customer_id AND o.order_id = i.order_item_id AND i.order_item_product_id = p.product_id AND p.product_price < 100
+
+// question 7:
+sqlContext.sql("create table question6_hive as select * from question6")

@@ -1,0 +1,127 @@
+// question 1:
+
+sqoop import-all-tables \
+  --connect jdbc:mysql://ms.itversity.com:3306/retail_db \
+  --username retail_user \
+  --password itversity \
+  --warehouse-dir /user/lanwei94/hive/warehouse/retail_stage_db \
+  --compress \
+  --compression-codec snappy \
+  --as-avrodatafile \
+  --num-mappers 1 
+
+
+// question 2:
+hadoop fs -get /user/lanwei94/hive/warehouse/retail_stage_db/orders/part-m-00000.avro
+avro-tools getschema part-m-00000.avro > orders.avsc
+
+hadoop fs -mkdir /user/hive/schemas
+hadoop fs -mkdir /user/hive/schemas/order
+
+hadoop fs -copyFromLocal orders.avsc /user/hive/schemas/order
+
+// lunch hive and use database: lanwei94_exercise
+// Then create external table
+create external table orders_sqoop
+STORED AS AVRO
+LOCATION '/user/lanwei94/hive/warehouse/retail_stage_db/orders'
+TBLPROPERTIES ('avro.schema.url'='/user/lanwei94/hive/schemas/order/orders.avsc');
+
+
+
+// question 3:
+SELECT orders_sqoop.*
+FROM orders_sqoop, (SELECT orders_sqoop.order_date AS order_date, COUNT(order_id) AS count_orders
+FROM orders_sqoop 
+GROUP BY orders_sqoop.order_date
+HAVING COUNT(order_id) IN (SELECT MAX(temp.count_orders) AS max
+FROM (SELECT order_date, COUNT(order_id) AS count_orders
+FROM orders_sqoop
+GROUP BY order_date) temp)) temp2
+WHERE orders_sqoop.order_date = temp2.order_date;
+
+
+SELECT * FROM orders_sqoop 
+WHERE order_date IN (SELECT temp.order_date
+FROM (SELECT order_date, COUNT(order_id) AS count_orders
+FROM orders_sqoop
+GROUP BY order_date
+ORDER BY count_orders DESC
+LIMIT 1) temp);
+
+
+// question 4:
+// question 5:
+create table orders_avro
+(order_id int,
+order_date date,
+order_customer_id string,
+order_status string)
+partitioned by (order_month string)
+STORED AS AVRO;
+
+
+// question 6:
+set hive.exec.dynamic.partition = true;
+set hive.exec.dynamic.partition.mode = nonstrict;
+set hive.exec.max.dynamic.partitions.pernode = 300;
+
+insert overwrite table orders_avro partition (order_month)
+select order_id, to_date(from_unixtime(cast(order_date/1000 as int))), order_customer_id, order_status, substr(from_unixtime(cast(order_date/1000 as int)),1,7) as order_month from orders_sqoop;
+
+
+dfs -ls /user/lanwei94/hive/warehouse/retail_stage_db/
+// created multiple folders. Each folder is for a partition.
+
+insert into table orders_avro partition (order_month = '2014-09') values 
+(68883,'2014-09-11','11014','CLOSED');
+
+//For above, date data type should use string to insert. the column used to partition the table do not need to added in the brackets
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

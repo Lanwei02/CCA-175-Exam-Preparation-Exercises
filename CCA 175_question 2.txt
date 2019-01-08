@@ -1,0 +1,51 @@
+// Question 1:
+sqoop import \
+--connect jdbc:mysql:// \
+--username \
+--password \
+--table products \
+--target-dir /user/cloudera/products \
+--fields-terminated-by "|" \
+--as-textfile
+
+//Question 2:
+hadoop fs -mkdir /user/cloudera/problem2
+haddop fs -mkdir /user/cloudera/problem2/products
+hadoop fs -mv /user/cloudera/products /user/cloudera/problem2/products
+
+// Question 3:
+val products = scala.io.Source.fromFile("/data/retail_db/products/part-00000").getLines.toList
+val productsRDD = sc.parallelize(products).map(rec => {val a = rec.split(",")
+(a(0), a(1), a(2), a(3), a(4), a(5))})
+productsRDD.take(10).foreach(println)
+
+val productsDF = productsRDD.toDF("product_id", "product_category_id", "product_name", "product_description", "product_price", "product_image")
+
+productsDF.show
+
+//Spark SQL
+productsDF.registerTempTable("products")
+// 1.
+val price_100 = sqlContext.sql("SELECT * FROM products WHERE product_price < 100")
+price_100.show
+// 2.
+val price_100_pruductCount = sqlContext.sql("select product_category_id, max(product_price) as maximum_price, count(distinct(product_id)) as total_products, cast(avg(product_price) as decimal(10,2)) as average_price, min(product_price) as minimum_price from products where product_price <100 group by product_category_id order by product_category_id desc")
+price_100_pruductCount.show
+
+val price_100_PruductCount = sqlContext.sql("SELECT product_category_id, MAX(product_price) AS max_price, " +
+"COUNT(DISTINCT product_name) AS product_count, ROUND(AVG(product_price)) AS average_price, " + "MIN(product_price) AS min_price FROM products WHERE product_price < 100 " +
+"GROUP BY product_category_id ORDER BY product_category_id")
+price_100_PruductCount.show
+
+import com.databricks.spark.avro._
+sqlContext.setConf("spark.sql.avro.Compression.codec", "snappy")
+price_100_PruductCount.write.avro("/user/cloudera/problem2/products/result-df")
+
+
+
+
+
+
+
+
+
