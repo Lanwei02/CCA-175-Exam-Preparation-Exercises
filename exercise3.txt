@@ -25,7 +25,7 @@ crime_count.toDF("Crime Type", "Number of Incidents").write.json("user/lanwei94/
 
 // sqlContext
 
-val crime = sc.crime("/public/crime/csv")
+val crime = sc.textFile("/public/crime/csv")
 
 val header = crime.first
 val crimeWithoutHeader = crime.filter(rec => rec != header)
@@ -38,6 +38,7 @@ type_locationDF.registerTempTable("crime")
 
 val crime_count = sqlContext.sql("SELECT Crime_Type, COUNT(*) AS crime_count FROM crime WHERE Location_Description == \"RESIDENCE\" "+
 "GROUP BY Crime_Type ORDER BY COUNT(*) DESC LIMIT 3")
+
 
 crime_count.write.json("user/lanwei94/solutions/solution03/RESIDENCE_AREA_CRIMINAL_TYPE_DATA")
 
